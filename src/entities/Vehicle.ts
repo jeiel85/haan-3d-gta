@@ -18,6 +18,7 @@ export class Vehicle {
   public type: VehicleType;
   public config: VehicleConfig;
   public isPlayerDriving = false;
+  public isStolen = false;
 
   // Physics state
   public position: THREE.Vector3;
@@ -473,11 +474,11 @@ export class Vehicle {
     const gripFactor = this.isDrifting ? 0.8 : 0.15; // lower grip during drift
     this.velocity.addScaledVector(rightVec, -lateralSpeed * (1 - gripFactor));
 
-    // 5. Yaw Turn rotation based on speed & steer angle
+    // 5. Yaw Turn rotation based on speed & steer angle (D turns Right, A turns Left)
     if (Math.abs(currentSpeed) > 0.2) {
       const turnDir = currentSpeed > 0 ? 1 : -1;
       const speedTurnFactor = Math.min(Math.abs(currentSpeed) / 12, 1.2);
-      this.heading += this.steerAngle * turnDir * speedTurnFactor * delta * 2.8;
+      this.heading -= this.steerAngle * turnDir * speedTurnFactor * delta * 2.8;
       this.mesh.rotation.y = this.heading;
     }
 
@@ -485,13 +486,13 @@ export class Vehicle {
     this.position.addScaledVector(this.velocity, delta);
     this.mesh.position.copy(this.position);
 
-    // 7. Suspension Tilt & Roll
-    const rollAngle = -this.steerAngle * (currentSpeed / (cfg.maxSpeed / 3.6)) * 0.15;
+    // 7. Suspension Tilt & Roll (natural turn roll)
+    const rollAngle = this.steerAngle * (currentSpeed / (cfg.maxSpeed / 3.6)) * 0.15;
     this.mesh.rotation.z = THREE.MathUtils.lerp(this.mesh.rotation.z, rollAngle, delta * 10);
 
-    // 8. Animate Front Wheels Steering
+    // 8. Animate Front Wheels Steering (match turn direction)
     this.frontWheels.forEach(w => {
-      w.rotation.y = this.steerAngle * 1.5;
+      w.rotation.y = -this.steerAngle * 1.5;
     });
 
     // 9. Siren Lights Flashing for Police

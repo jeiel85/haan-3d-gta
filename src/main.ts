@@ -47,6 +47,7 @@ class Game {
   private clock = new THREE.Clock();
   private isRunning = false;
   private isGameOver = false;
+  private vehicleCooldown = 0;
 
   constructor() {
     this.canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
@@ -197,7 +198,8 @@ class Game {
 
   private handleInputs(delta: number) {
     // 1. Vehicle Entry / Exit (F key or Enter)
-    if (this.input.enterVehicleTrigger) {
+    if (this.input.enterVehicleTrigger && this.vehicleCooldown <= 0) {
+      this.vehicleCooldown = 0.5; // 500ms debounce prevents instant exit
       if (this.player.isDriving) {
         this.player.exitVehicle();
         this.hud.setTip('💡 차량에서 하차했습니다.');
@@ -205,10 +207,21 @@ class Game {
         const allVehicles = [...this.vehicles, ...this.trafficManager.vehicles, ...this.wantedSystem.policeCars];
         const nearest = this.player.findNearestVehicle(allVehicles);
         if (nearest) {
+          // If hijacking an active pursuit police car, transfer ownership out of pursuit pool
+          const copIdx = this.wantedSystem.policeCars.indexOf(nearest);
+          if (copIdx !== -1) {
+            this.wantedSystem.policeCars.splice(copIdx, 1);
+            this.vehicles.push(nearest);
+          }
+
           this.player.enterVehicle(nearest);
-          this.hud.setTip(`🚗 [${nearest.config.name}]에 탑승했습니다! (W: 가속, Space: 드리프트)`);
-          if (nearest.type === 'POLICE') {
-            this.wantedSystem.addCrime(1); // stealing police car adds wanted star
+          this.hud.setTip(`🚗 [${nearest.config.name}]에 탑승했습니다! (W: 가속, A/D: 조향, Space: 드리프트)`);
+
+          // Only trigger wanted star on the first theft of a police car
+          if (nearest.type === 'POLICE' && !nearest.isStolen) {
+            nearest.isStolen = true;
+            this.wantedSystem.addCrime(1);
+            this.hud.setTip('🚨 경찰 순찰차 탈취! 지명수배 1성이 발령되었습니다!');
           }
         }
       }
@@ -295,7 +308,17 @@ class Game {
   private updateGame(delta: number) {
     if (this.isGameOver) return;
 
+    if (this.vehicleCooldown > 0) {
+      this.vehicleCooldown -= delta;
+    }
+
     const allVehicles = [...this.vehicles, ...this.trafficManager.vehicles, ...this.wantedSystem.policeCars];
+
+    // Crosshair visibility
+    const crosshair = document.getElementById('crosshair');
+    if (crosshair) {
+      crosshair.style.opacity = this.player.isDriving ? '0.2' : '0.9';
+    }
 
     // 1. Update Player (Driving vs Foot)
     if (this.player.isDriving && this.player.currentVehicle) {
@@ -406,8 +429,10 @@ class Game {
     if (isDriving && vehicle) {
       if (this.mouseActiveTimer > 0) {
         this.mouseActiveTimer -= delta;
-      } else if (Math.abs(vehicle.speedKmh) > 4) {
-        const targetHeading = vehicle.speedKmh > 0 ? vehicle.heading : vehicle.heading + Math.PI;
+      } else if (Math.abs(vehicle.speedKmh) > 3) {
+        // Camera forward is (-sin(yaw), 0, -cos(yaw)). Vehicle forward is (sin(h), 0, cos(h)).
+        // To point in the same direction, cameraYaw must align to vehicle.heading + Math.PI!
+        const targetHeading = vehicle.speedKmh >= 0 ? vehicle.heading + Math.PI : vehicle.heading;
         let diff = targetHeading - this.cameraYaw;
         while (diff > Math.PI) diff -= Math.PI * 2;
         while (diff < -Math.PI) diff += Math.PI * 2;
@@ -417,7 +442,7 @@ class Game {
     }
 
     const targetPos = isDriving && vehicle ? vehicle.position : this.player.position;
-    const focusHeight = isDriving ? 1.1 : 1.45;
+    const focusHeight = isDriving ? 1.4 : 1.45;
     const focusPoint = targetPos.clone().add(new THREE.Vector3(0, focusHeight, 0));
 
     // Forward direction vector according to current yaw & pitch
@@ -432,7 +457,7 @@ class Game {
 
     switch (this.cameraMode) {
       case 'TPS_CLOSE': {
-        const dist = isDriving ? 6.2 : 4.6;
+        const dist = isDriving ? 6.8 : 4.6;
         // Camera placed behind focusPoint along -forward
         targetCamPos = focusPoint.clone().sub(forward.clone().multiplyScalar(dist));
         // Over-the-shoulder right offset when on foot
