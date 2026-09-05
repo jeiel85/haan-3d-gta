@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>GTA: 하안사거리 (Haan Sageori 3D)</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%3E<text y=%22.9em%22 font-size=%2290%22>🚗</text></svg>">
+  <style>
+    :root {
+      --primary: #ffaa00;
+      --accent: #00d2ff;
+      --danger: #ff3344;
+      --success: #00ff88;
+      --bg-glass: rgba(15, 18, 28, 0.75);
+      --border-glass: rgba(255, 255, 255, 0.15);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #05070d;
+      font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      color: #fff;
+    }
+
+    #game-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+    }
+
+    /* HUD Container */
+    #hud {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      font-family: 'Impact', 'Arial Black', sans-serif;
+      text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 0 3px 6px rgba(0,0,0,0.8);
+    }
+
+    /* Top Right Status (GTA Style) */
+    .top-right {
+      position: absolute;
+      top: 20px;
+      right: 25px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 10px;
+    }
+
+    .wanted-stars {
+      display: flex;
+      gap: 5px;
+      font-size: 26px;
+      color: #444;
+      filter: drop-shadow(0 2px 5px rgba(0,0,0,0.8));
+    }
+
+    .wanted-stars .star.active {
+      color: #ffd700;
+      text-shadow: 0 0 12px #ffbb00;
+      animation: star-pulse 0.8s infinite alternate;
+    }
+
+    @keyframes star-pulse {
+      0% { transform: scale(1); filter: drop-shadow(0 0 5px #ff5500); }
+      100% { transform: scale(1.18); filter: drop-shadow(0 0 12px #ffff00); }
+    }
+
+    .cash-display {
+      font-size: 32px;
+      letter-spacing: 2px;
+      color: #55ff77;
+      text-shadow: 0 0 10px rgba(85,255,119,0.5), 2px 2px 0 #000;
+    }
+
+    .bars-container {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      width: 180px;
+    }
+
+    .bar-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0,0,0,0.6);
+      padding: 3px 6px;
+      border-radius: 4px;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    .bar-icon {
+      font-size: 14px;
+      width: 18px;
+      text-align: center;
+    }
+
+    .bar-meter {
+      flex: 1;
+      height: 12px;
+      background: #222;
+      border-radius: 2px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .bar-fill {
+      height: 100%;
+      width: 100%;
+      transition: width 0.2s ease-out;
+    }
+
+    .bar-fill.health {
+      background: linear-gradient(90deg, #ff2222, #00ff66);
+    }
+
+    .bar-fill.armor {
+      background: linear-gradient(90deg, #0088ff, #00e1ff);
+    }
+
+    /* Top Left: District & Time */
+    .top-left {
+      position: absolute;
+      top: 20px;
+      left: 25px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .district-title {
+      font-size: 24px;
+      color: #ffdd44;
+      letter-spacing: 1px;
+    }
+
+    .district-subtitle {
+      font-family: -apple-system, BlinkMacSystemFont, "Pretendard", sans-serif;
+      font-size: 13px;
+      color: #ccc;
+      font-weight: 600;
+    }
+
+    .time-weather-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 12px;
+      background: rgba(0,0,0,0.6);
+      padding: 3px 8px;
+      border-radius: 12px;
+      width: fit-content;
+      margin-top: 4px;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    /* Top Center: Mission & Radio Notification */
+    .top-center {
+      position: absolute;
+      top: 25px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      width: 90%;
+      max-width: 550px;
+    }
+
+    .mission-banner {
+      display: none;
+      background: linear-gradient(135deg, rgba(20, 25, 40, 0.95), rgba(40, 20, 30, 0.95));
+      border: 2px solid #ffaa00;
+      box-shadow: 0 0 20px rgba(255, 170, 0, 0.4);
+      padding: 10px 20px;
+      border-radius: 8px;
+      text-align: center;
+      width: 100%;
+      animation: banner-drop 0.4s ease-out;
+    }
+
+    .mission-title {
+      font-size: 16px;
+      color: #ffbb00;
+      letter-spacing: 1px;
+      margin-bottom: 3px;
+    }
+
+    .mission-desc {
+      font-family: -apple-system, BlinkMacSystemFont, "Pretendard", sans-serif;
+      font-size: 14px;
+      color: #fff;
+      font-weight: 500;
+    }
+
+    .mission-timer {
+      font-size: 20px;
+      color: #ff3344;
+      margin-top: 4px;
+      font-weight: bold;
+    }
+
+    .radio-banner {
+      opacity: 0;
+      transition: opacity 0.5s ease;
+      background: rgba(10, 15, 25, 0.85);
+      border-left: 4px solid #00d2ff;
+      padding: 6px 16px;
+      border-radius: 4px;
+      font-size: 14px;
+      color: #00e1ff;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      font-weight: 600;
+    }
+
+    @keyframes banner-drop {
+      0% { transform: translateY(-30px); opacity: 0; }
+      100% { transform: translateY(0); opacity: 1; }
+    }
+
+    /* Bottom Left: Radar / Minimap */
+    .bottom-left {
+      position: absolute;
+      bottom: 25px;
+      left: 25px;
+      display: flex;
+      align-items: flex-end;
+      gap: 15px;
+    }
+
+    .minimap-container {
+      position: relative;
+      width: 170px;
+      height: 170px;
+      border-radius: 50%;
+      border: 3px solid #334455;
+      background: #111a24;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.8), inset 0 0 15px rgba(0,0,0,0.7);
+      overflow: hidden;
+    }
+
+    #minimap-canvas {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+    }
+
+    .minimap-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      pointer-events: none;
+      box-shadow: inset 0 0 8px rgba(0,210,255,0.4);
+    }
+
+    .minimap-compass {
+      position: absolute;
+      top: 5px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      color: #ff3344;
+      font-weight: 900;
+    }
+
+    .action-tip {
+      font-family: -apple-system, BlinkMacSystemFont, "Pretendard", sans-serif;
+      font-size: 13px;
+      background: rgba(0,0,0,0.75);
+      border-left: 3px solid #ffaa00;
+      padding: 6px 12px;
+      border-radius: 4px;
+      color: #ffea70;
+      max-width: 240px;
+      line-height: 1.4;
+      pointer-events: auto;
+    }
+
+    /* Bottom Right: Vehicle Speedometer */
+    .bottom-right {
+      position: absolute;
+      bottom: 25px;
+      right: 25px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+    }
+
+    .speedometer-card {
+      display: none;
+      background: rgba(12, 16, 26, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 12px;
+      padding: 12px 18px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+      text-align: right;
+    }
+
+    .vehicle-model-name {
+      font-family: -apple-system, BlinkMacSystemFont, "Pretendard", sans-serif;
+      font-size: 14px;
+      color: #88bbff;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+
+    .speed-number {
+      font-size: 46px;
+      color: #ffffff;
+      line-height: 1;
+    }
+
+    .speed-unit {
+      font-size: 14px;
+      color: #ffaa00;
+      margin-left: 4px;
+    }
+
+    .gear-display {
+      font-size: 18px;
+      color: #00ff88;
+      margin-top: 4px;
+    }
+
+    /* Help & Instruction Modal */
+    #help-btn {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      pointer-events: auto;
+      background: rgba(20, 25, 40, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: #fff;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    #help-btn:hover {
+      background: #ffaa00;
+      color: #000;
+      font-weight: bold;
+    }
+
+    #modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(6px);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+      pointer-events: auto;
+    }
+
+    .modal-content {
+      background: #121622;
+      border: 2px solid #ffaa00;
+      box-shadow: 0 0 30px rgba(255, 170, 0, 0.3);
+      width: 90%;
+      max-width: 600px;
+      border-radius: 12px;
+      padding: 24px;
+      color: #eee;
+      max-height: 85vh;
+      overflow-y: auto;
+      font-family: -apple-system, BlinkMacSystemFont, "Pretendard", sans-serif;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255,255,255,0.15);
+      padding-bottom: 12px;
+      margin-bottom: 16px;
+    }
+
+    .modal-header h2 {
+      font-family: 'Impact', 'Arial Black', sans-serif;
+      color: #ffbb00;
+      font-size: 26px;
+      letter-spacing: 1px;
+    }
+
+    .close-btn {
+      background: none;
+      border: none;
+      color: #aaa;
+      font-size: 24px;
+      cursor: pointer;
+    }
+
+    .key-guide-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .key-item {
+      background: rgba(255,255,255,0.05);
+      padding: 10px 12px;
+      border-radius: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+    }
+
+    .key-badge {
+      background: #334460;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-weight: bold;
+      color: #ffea70;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    .modal-section-title {
+      font-weight: bold;
+      color: #00d2ff;
+      margin: 14px 0 8px 0;
+      font-size: 15px;
+    }
+
+    /* Start / Splash Overlay */
+    #splash-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle at center, #1a2238 0%, #080c14 100%);
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 20px;
+    }
+
+    .logo-main {
+      font-family: 'Impact', 'Arial Black', sans-serif;
+      font-size: 58px;
+      color: #ffaa00;
+      letter-spacing: 3px;
+      text-shadow: 0 0 25px rgba(255,170,0,0.6), 4px 4px 0 #000;
+      margin-bottom: 8px;
+    }
+
+    .logo-sub {
+      font-size: 20px;
+      color: #00e1ff;
+      letter-spacing: 2px;
+      font-weight: 700;
+      margin-bottom: 24px;
+      text-shadow: 2px 2px 0 #000;
+    }
+
+    .start-btn {
+      background: linear-gradient(135deg, #ffaa00, #ff6600);
+      color: #000;
+      font-family: 'Impact', 'Arial Black', sans-serif;
+      font-size: 26px;
+      letter-spacing: 1.5px;
+      padding: 14px 40px;
+      border: none;
+      border-radius: 30px;
+      cursor: pointer;
+      box-shadow: 0 0 25px rgba(255,170,0,0.5);
+      transition: all 0.2s;
+    }
+
+    .start-btn:hover {
+      transform: scale(1.06);
+      box-shadow: 0 0 35px rgba(255,200,0,0.8);
+    }
+
+    .splash-features {
+      margin-top: 25px;
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 600px;
+      font-size: 13px;
+      color: #aaa;
+    }
+
+    .feature-tag {
+      background: rgba(255,255,255,0.08);
+      padding: 6px 12px;
+      border-radius: 15px;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+
+    /* Mobile Controls */
+    #mobile-controls {
+      display: none;
+      position: absolute;
+      bottom: 15px;
+      left: 0;
+      width: 100%;
+      height: 200px;
+      pointer-events: none;
+      z-index: 50;
+    }
+
+    .touch-btn {
+      position: absolute;
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background: rgba(20, 25, 40, 0.75);
+      border: 2px solid rgba(255, 255, 255, 0.4);
+      color: #fff;
+      font-size: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      pointer-events: auto;
+      touch-action: none;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    }
+
+    .touch-btn:active {
+      background: rgba(255, 170, 0, 0.8);
+      color: #000;
+    }
+
+    #btn-touch-f { right: 20px; bottom: 85px; background: rgba(0, 150, 255, 0.6); }
+    #btn-touch-punch { right: 90px; bottom: 85px; }
+    #btn-touch-jump { right: 90px; bottom: 20px; }
+    #btn-touch-gas { right: 20px; bottom: 85px; background: rgba(0, 220, 100, 0.6); }
+    #btn-touch-brake { right: 20px; bottom: 20px; background: rgba(255, 50, 50, 0.6); }
+    #btn-touch-horn { right: 90px; bottom: 85px; }
+    #btn-touch-drift { right: 90px; bottom: 20px; }
+
+    /* Floating Wasted / Busted banner */
+    #game-over-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(180, 0, 0, 0.4);
+      z-index: 150;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+    }
+
+    .wasted-text {
+      font-family: 'Impact', 'Arial Black', sans-serif;
+      font-size: 72px;
+      color: #ff2233;
+      letter-spacing: 5px;
+      text-shadow: 0 0 30px #ff0000, 4px 4px 0 #000;
+      animation: wasted-zoom 1.5s ease-out forwards;
+    }
+
+    @keyframes wasted-zoom {
+      0% { transform: scale(0.5); opacity: 0; }
+      50% { transform: scale(1.1); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+      .top-right { top: 12px; right: 12px; }
+      .top-left { top: 12px; left: 12px; }
+      .cash-display { font-size: 24px; }
+      .bars-container { width: 130px; }
+      .district-title { font-size: 18px; }
+      .bottom-left { bottom: 15px; left: 15px; }
+      .minimap-container { width: 120px; height: 120px; }
+      .logo-main { font-size: 38px; }
+      #help-btn { font-size: 11px; padding: 4px 10px; }
+      #mobile-controls { display: block; }
+    }
+  </style>
+  <script type="module" crossorigin src="./assets/index-CfSf11nl.js"></script>
+</head>
+<body>
+  <!-- 3D Canvas -->
+  <canvas id="game-canvas"></canvas>
+
+  <!-- Start / Splash Screen -->
+  <div id="splash-screen">
+    <div class="logo-main">GTA: 하안사거리</div>
+    <div class="logo-sub">HAAN SAGEORI 3D OPEN WORLD</div>
+    <button class="start-btn" id="start-btn">PLAY GAME (시작)</button>
+    <div class="splash-features">
+      <span class="feature-tag">🏙️ 광명 하안사거리 4거리 실사 고증</span>
+      <span class="feature-tag">🏢 올리브영·국민은행·학원가 리얼 간판</span>
+      <span class="feature-tag">🚗 5종 차량 (세단·스포츠카·마을버스·오토바이·경찰차)</span>
+      <span class="feature-tag">🚨 1~5성 경찰 수배 & 추격전</span>
+      <span class="feature-tag">🛵 배달 특급 & 택시 미션</span>
+      <span class="feature-tag">📻 3채널 Web Audio 신스 라디오</span>
+    </div>
+  </div>
+
+  <!-- HUD Overlay -->
+  <div id="hud">
+    <!-- Top Left: District & Time -->
+    <div class="top-left">
+      <div class="district-title">광명 하안사거리</div>
+      <div class="district-subtitle">HAAN CROSSROAD | 오리로 & 하안로</div>
+      <div class="time-weather-badge">
+        <span id="time-display">☀️ 낮 (14:30)</span> | 
+        <span id="fps-display">60 FPS</span>
+      </div>
+    </div>
+
+    <!-- Help Toggle Button -->
+    <button id="help-btn">📖 조작법 & 미션 안내 [H]</button>
+
+    <!-- Top Right: Stars, Cash, HP/Armor -->
+    <div class="top-right">
+      <div class="wanted-stars" id="wanted-stars">
+        <span class="star">★</span>
+        <span class="star">★</span>
+        <span class="star">★</span>
+        <span class="star">★</span>
+        <span class="star">★</span>
+      </div>
+      <div class="cash-display" id="cash-display">₩ 500,000</div>
+      <div class="bars-container">
+        <div class="bar-wrap">
+          <span class="bar-icon">❤️</span>
+          <div class="bar-meter">
+            <div class="bar-fill health" id="health-bar" style="width: 100%;"></div>
+          </div>
+        </div>
+        <div class="bar-wrap">
+          <span class="bar-icon">🛡️</span>
+          <div class="bar-meter">
+            <div class="bar-fill armor" id="armor-bar" style="width: 100%;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top Center: Mission & Radio -->
+    <div class="top-center">
+      <div class="radio-banner" id="radio-banner">📻 HAAN K-WAVE FM</div>
+      <div class="mission-banner" id="mission-banner">
+        <div class="mission-title" id="mission-title">배달의 하안 (Baemin Rush)</div>
+        <div class="mission-desc" id="mission-desc">메가커피에서 픽업 후 하안주공 7단지로 배달하세요!</div>
+        <div class="mission-timer" id="mission-timer">⏱️ 00:45</div>
+      </div>
+    </div>
+
+    <!-- Bottom Left: Minimap & Tips -->
+    <div class="bottom-left">
+      <div class="minimap-container">
+        <canvas id="minimap-canvas" width="200" height="200"></canvas>
+        <div class="minimap-overlay"></div>
+        <div class="minimap-compass">N</div>
+      </div>
+      <div class="action-tip" id="action-tip">
+        💡 [F] 키로 주변 차량에 탑승하세요.
+      </div>
+    </div>
+
+    <!-- Bottom Right: Speedometer (when driving) -->
+    <div class="bottom-right">
+      <div class="speedometer-card" id="speedometer-card">
+        <div class="vehicle-model-name" id="vehicle-name">현대 소나타 세단</div>
+        <div>
+          <span class="speed-number" id="speed-value">0</span>
+          <span class="speed-unit">KM/H</span>
+        </div>
+        <div class="gear-display" id="gear-display">GEAR [D]</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile Touch Controls -->
+  <div id="mobile-controls">
+    <div class="touch-btn" id="btn-touch-f">🚗</div>
+    <div class="touch-btn" id="btn-touch-punch">👊</div>
+    <div class="touch-btn" id="btn-touch-jump">⬆️</div>
+    <div class="touch-btn" id="btn-touch-gas" style="display:none;">⚡</div>
+    <div class="touch-btn" id="btn-touch-brake" style="display:none;">🛑</div>
+    <div class="touch-btn" id="btn-touch-horn" style="display:none;">📢</div>
+  </div>
+
+  <!-- Help & Guide Modal -->
+  <div id="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>🎮 하안사거리 조작 가이드</h2>
+        <button class="close-btn" id="close-help-btn">&times;</button>
+      </div>
+      
+      <div class="modal-section-title">🏃 도보 조작 (On Foot)</div>
+      <div class="key-guide-grid">
+        <div class="key-item"><span>이동</span><span class="key-badge">W, A, S, D</span></div>
+        <div class="key-item"><span>전력 질주 (달리기)</span><span class="key-badge">Shift</span></div>
+        <div class="key-item"><span>점프</span><span class="key-badge">Space</span></div>
+        <div class="key-item"><span>펀치 공격 / 액션</span><span class="key-badge">클릭 / E</span></div>
+        <div class="key-item"><span>차량 탑승 / 강탈</span><span class="key-badge">F / Enter</span></div>
+        <div class="key-item"><span>카메라 시점 회전</span><span class="key-badge">마우스 드래그</span></div>
+      </div>
+
+      <div class="modal-section-title">🚗 차량 운전 조작 (Driving)</div>
+      <div class="key-guide-grid">
+        <div class="key-item"><span>가속 / 후진</span><span class="key-badge">W / S (↑ / ↓)</span></div>
+        <div class="key-item"><span>핸들 조향</span><span class="key-badge">A / D (← / →)</span></div>
+        <div class="key-item"><span>핸드브레이크 (드리프트)</span><span class="key-badge">Space</span></div>
+        <div class="key-item"><span>클랙슨 경적</span><span class="key-badge">H</span></div>
+        <div class="key-item"><span>차량 하차</span><span class="key-badge">F / Enter</span></div>
+        <div class="key-item"><span>경찰차 사이렌 토글</span><span class="key-badge">E</span></div>
+      </div>
+
+      <div class="modal-section-title">🌟 시스템 & 단축키</div>
+      <div class="key-guide-grid">
+        <div class="key-item"><span>카메라 시점 변경</span><span class="key-badge">C</span></div>
+        <div class="key-item"><span>시간대/날씨 전환 (낮/노을/밤/비)</span><span class="key-badge">T</span></div>
+        <div class="key-item"><span>라디오 채널 변경 (3개국)</span><span class="key-badge">R</span></div>
+        <div class="key-item"><span>미션 수락 / 취소</span><span class="key-badge">M</span></div>
+      </div>
+
+      <div class="modal-section-title">📍 하안사거리 주요 랜드마크 & 즐길 거리</div>
+      <p style="font-size: 13px; line-height: 1.6; color: #bbb;">
+        • <strong>하안사거리 대형 교차로</strong>: 광명시를 대표하는 오리로와 하안로 교차 중심 상권.<br/>
+        • <strong>올리브영, 국민은행, 메가커피, 파리바게뜨, 학원가</strong>: 리얼한 한글 네온 간판.<br/>
+        • <strong>배달 특급 미션</strong>: 카페/음식점에서 배달을 받아 주공아파트 단지로 신속 배달하여 ₩ 보상 획득!<br/>
+        • <strong>경찰 추격전</strong>: 범죄(시민 충돌, 차량 파손) 시 1~5성 수배 발동, 사이렌 순찰차의 끈질긴 포위망을 뚫고 탈출하세요!
+      </p>
+    </div>
+  </div>
+
+  <!-- Wasted Overlay -->
+  <div id="game-over-overlay">
+    <div class="wasted-text" id="game-over-title">WASTED</div>
+    <p style="color: #fff; margin-top: 15px; font-size: 18px;" id="game-over-msg">하안 응급실로 후송되었습니다 (-₩50,000)</p>
+  </div>
+
+  <!-- Main Game Script Module -->
+</body>
+</html>
