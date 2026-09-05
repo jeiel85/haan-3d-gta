@@ -35,13 +35,15 @@ class Game {
   private minimap: Minimap;
   private hud: HUD;
 
-  // Camera State
+  // Camera State (Unified FPS / TPS forward orientation)
   private cameraMode: CameraViewMode = 'TPS_CLOSE';
   private cameraYaw = 0;
-  private cameraPitch = 0.25;
+  private cameraPitch = 0.15; // vertical look angle
   private cameraCurrentPos = new THREE.Vector3(0, 5, -10);
+  private cameraCurrentLook = new THREE.Vector3(0, 1.4, 0);
+  private mouseActiveTimer = 0;
 
-  // Timing
+  // Timing & Game state
   private clock = new THREE.Clock();
   private isRunning = false;
   private isGameOver = false;
@@ -72,21 +74,21 @@ class Game {
     this.physics = new Physics(this.cityMap);
 
     // 4. Player & Vehicles
-    // Spawn player in front of KB Bank / Haan Sageori crosswalk
-    this.player = new Player(new THREE.Vector3(18, 0, 18));
+    // Spawn player on the sidewalk in front of the Haan Bus Stop / KB Bank plaza
+    this.player = new Player(new THREE.Vector3(14.5, 0, 20));
     this.scene.add(this.player.mesh);
 
-    // Spawn 4 Player-driveable parked vehicles at various corners of Haan Sageori
+    // Spawn 5 Player-driveable parked vehicles on the road curb lanes
     this.spawnDriveableVehicles();
 
     // 5. Pedestrians
     this.spawnPedestrians();
 
-    // 6. Traffic, Wanted, Missions & UI
+    // 6. Traffic, Wanted, Missions, Input & UI
     this.trafficManager = new TrafficManager(this.scene, this.cityMap);
     this.wantedSystem = new WantedSystem(this.scene);
     this.missionManager = new MissionManager(this.scene);
-    this.input = new InputController();
+    this.input = new InputController(this.canvas);
     this.minimap = new Minimap('minimap-canvas', this.cityMap);
     this.hud = new HUD();
 
@@ -94,17 +96,18 @@ class Game {
   }
 
   private spawnDriveableVehicles() {
+    // Road width is 26m (-13m to +13m). Curb lanes are at |coord| = 10.8m.
     const parked = [
-      // 1. Blue Sonata Sedan parked near KB Bank
-      { type: 'SEDAN' as const, pos: new THREE.Vector3(18, 0, 8), heading: Math.PI / 2, color: 0x0984e3 },
-      // 2. Red Sports GT Supercar parked near Olive Young
-      { type: 'SPORTS' as const, pos: new THREE.Vector3(-18, 0, 12), heading: -Math.PI / 2, color: 0xd63031 },
-      // 3. Mint Delivery Scooter near Mega Coffee
-      { type: 'SCOOTER' as const, pos: new THREE.Vector3(22, 0, -20), heading: 0, color: 0x2bcbba },
-      // 4. Green Gwangmyeong Maeul Bus parked at bus shelter
-      { type: 'BUS' as const, pos: new THREE.Vector3(15.2, 0, 28), heading: Math.PI, color: 0x00b894 },
-      // 5. Police Patrol car near Woori Bank
-      { type: 'POLICE' as const, pos: new THREE.Vector3(-18, 0, -15), heading: Math.PI / 2, color: 0xffffff }
+      // 1. Blue Sonata Sedan parked along Haan-ro road curb
+      { type: 'SEDAN' as const, pos: new THREE.Vector3(26, 0, 10.8), heading: Math.PI / 2, color: 0x0984e3 },
+      // 2. Red Sports GT Supercar parked along Haan-ro road curb
+      { type: 'SPORTS' as const, pos: new THREE.Vector3(-26, 0, -10.8), heading: -Math.PI / 2, color: 0xd63031 },
+      // 3. Mint Delivery Scooter parked at road curb near Mega Coffee
+      { type: 'SCOOTER' as const, pos: new THREE.Vector3(10.8, 0, -20), heading: Math.PI, color: 0x2bcbba },
+      // 4. Green Gwangmyeong Maeul Bus parked at bus stop bay on road (in front of bus shelter at x=15.2)
+      { type: 'BUS' as const, pos: new THREE.Vector3(10.8, 0, 28), heading: Math.PI, color: 0x00b894 },
+      // 5. Police Patrol car parked at road curb near Woori Bank
+      { type: 'POLICE' as const, pos: new THREE.Vector3(-10.8, 0, -25), heading: 0, color: 0xffffff }
     ];
 
     parked.forEach(cfg => {
@@ -150,7 +153,32 @@ class Game {
       if (splash) splash.style.display = 'none';
       this.isRunning = true;
       this.clock.start();
+
+      // Lock mouse cursor immediately on game start for seamless FPS feel
+      this.input.requestPointerLock();
+
       this.animate();
+    });
+
+    // Help Modal Pointer Lock handling
+    const helpBtn = document.getElementById('help-btn');
+    const closeHelpBtn = document.getElementById('close-help-btn');
+    const modalOverlay = document.getElementById('modal-overlay');
+
+    helpBtn?.addEventListener('click', () => {
+      this.input.exitPointerLock();
+    });
+
+    closeHelpBtn?.addEventListener('click', () => {
+      if (this.isRunning) {
+        this.input.requestPointerLock();
+      }
+    });
+
+    modalOverlay?.addEventListener('click', (e) => {
+      if (e.target === modalOverlay && this.isRunning) {
+        this.input.requestPointerLock();
+      }
     });
   }
 
@@ -160,14 +188,14 @@ class Game {
 
     const delta = Math.min(this.clock.getDelta(), 0.1);
 
-    this.handleInputs();
+    this.handleInputs(delta);
     this.updateGame(delta);
     this.updateCamera(delta);
 
     this.renderer.render(this.scene, this.camera);
   };
 
-  private handleInputs() {
+  private handleInputs(delta: number) {
     // 1. Vehicle Entry / Exit (F key or Enter)
     if (this.input.enterVehicleTrigger) {
       if (this.player.isDriving) {
@@ -180,19 +208,19 @@ class Game {
           this.player.enterVehicle(nearest);
           this.hud.setTip(`🚗 [${nearest.config.name}]에 탑승했습니다! (W: 가속, Space: 드리프트)`);
           if (nearest.type === 'POLICE') {
-            this.wantedSystem.addCrime(1); // stealing police car adds wanted star!
+            this.wantedSystem.addCrime(1); // stealing police car adds wanted star
           }
         }
       }
     }
 
-    // 2. Punch / Attack (E or Left Mouse Click)
+    // 2. Punch / Attack (E or Left Mouse Click in pointer lock)
     if (this.input.punchTrigger && !this.player.isDriving) {
       const punched = this.player.punch();
       if (punched) {
         // Check if hit nearby pedestrian
         this.pedestrians.forEach(ped => {
-          if (ped.state !== 'DOWN' && this.player.position.distanceTo(ped.position) < 1.8) {
+          if (ped.state !== 'DOWN' && this.player.position.distanceTo(ped.position) < 2.0) {
             const punchImpulse = new THREE.Vector3(Math.sin(this.player.heading), 0, Math.cos(this.player.heading)).multiplyScalar(10);
             ped.hit(punchImpulse);
             this.wantedSystem.addCrime(1);
@@ -201,13 +229,13 @@ class Game {
       }
     }
 
-    // 3. Horn & Siren (H key)
+    // 3. Horn & Siren (H key or Right Mouse Click)
     if (this.input.hornTrigger) {
       if (this.player.isDriving && this.player.currentVehicle) {
         soundManager.playHorn();
         // Scare nearby pedestrians
         this.pedestrians.forEach(ped => {
-          if (ped.position.distanceTo(this.player.currentVehicle!.position) < 14) {
+          if (ped.position.distanceTo(this.player.currentVehicle!.position) < 15) {
             ped.triggerPanic(this.player.currentVehicle!.position);
           }
         });
@@ -219,7 +247,13 @@ class Game {
       const views: CameraViewMode[] = ['TPS_CLOSE', 'TPS_FAR', 'TOP_DOWN', 'HOOD_FIRST'];
       const nextIdx = (views.indexOf(this.cameraMode) + 1) % views.length;
       this.cameraMode = views[nextIdx];
-      this.hud.setTip(`📷 카메라 시점: [${this.cameraMode}]`);
+      const viewNames = {
+        TPS_CLOSE: '3인칭 근접',
+        TPS_FAR: '3인칭 원거리',
+        TOP_DOWN: '클래식 탑다운',
+        HOOD_FIRST: '1인칭 FPS 뷰'
+      };
+      this.hud.setTip(`📷 카메라 시점: [${viewNames[this.cameraMode]}]`);
     }
 
     // 5. Time & Weather Toggle (T key)
@@ -245,10 +279,14 @@ class Game {
       }
     }
 
-    // Mouse camera rotation
+    // 8. FPS Mouse Look (Mouse moves freely rotate camera)
+    const sensitivity = 0.0022;
     if (this.input.mouseDeltaX !== 0 || this.input.mouseDeltaY !== 0) {
-      this.cameraYaw -= this.input.mouseDeltaX * 0.0035;
-      this.cameraPitch = Math.max(0.05, Math.min(Math.PI / 2.2, this.cameraPitch - this.input.mouseDeltaY * 0.0035));
+      this.cameraYaw -= this.input.mouseDeltaX * sensitivity;
+      // Moving mouse UP looks UP (increases pitch), moving mouse DOWN looks DOWN
+      this.cameraPitch -= this.input.mouseDeltaY * sensitivity;
+      this.cameraPitch = Math.max(-0.65, Math.min(1.2, this.cameraPitch));
+      this.mouseActiveTimer = 1.6; // active manual look timer
     }
 
     this.input.consumeTriggers();
@@ -272,7 +310,7 @@ class Game {
       this.physics.updateVehicleCollisions(
         v,
         allVehicles,
-        (ped) => {
+        () => {
           this.wantedSystem.addCrime(1);
         },
         () => {
@@ -293,7 +331,7 @@ class Game {
 
       // Tip for nearby cars
       const nearest = this.player.findNearestVehicle(allVehicles);
-      if (nearest && this.player.position.distanceTo(nearest.position) < 3.5) {
+      if (nearest && this.player.position.distanceTo(nearest.position) < 3.8) {
         this.hud.setTip(`💡 [F] 키를 눌러 [${nearest.config.name}]에 탑승하세요.`);
       }
     }
@@ -361,65 +399,90 @@ class Game {
   }
 
   private updateCamera(delta: number) {
-    const target = this.player.isDriving && this.player.currentVehicle
-      ? this.player.currentVehicle.position
-      : this.player.position;
+    const isDriving = this.player.isDriving && this.player.currentVehicle !== null;
+    const vehicle = this.player.currentVehicle;
+
+    // Driving camera auto-alignment: when moving forward without mouse movement, align camera behind vehicle
+    if (isDriving && vehicle) {
+      if (this.mouseActiveTimer > 0) {
+        this.mouseActiveTimer -= delta;
+      } else if (Math.abs(vehicle.speedKmh) > 4) {
+        const targetHeading = vehicle.speedKmh > 0 ? vehicle.heading : vehicle.heading + Math.PI;
+        let diff = targetHeading - this.cameraYaw;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        this.cameraYaw += diff * Math.min(1, delta * 3.5);
+        this.cameraPitch = THREE.MathUtils.lerp(this.cameraPitch, 0.22, delta * 3.0);
+      }
+    }
+
+    const targetPos = isDriving && vehicle ? vehicle.position : this.player.position;
+    const focusHeight = isDriving ? 1.1 : 1.45;
+    const focusPoint = targetPos.clone().add(new THREE.Vector3(0, focusHeight, 0));
+
+    // Forward direction vector according to current yaw & pitch
+    const forward = new THREE.Vector3(
+      -Math.sin(this.cameraYaw) * Math.cos(this.cameraPitch),
+      Math.sin(this.cameraPitch),
+      -Math.cos(this.cameraYaw) * Math.cos(this.cameraPitch)
+    );
 
     let targetCamPos = new THREE.Vector3();
-    let lookTarget = target.clone().add(new THREE.Vector3(0, 1.4, 0));
+    let lookTarget = new THREE.Vector3();
 
     switch (this.cameraMode) {
       case 'TPS_CLOSE': {
-        const dist = 5.2;
-        const height = 2.4;
-        const offset = new THREE.Vector3(
-          Math.sin(this.cameraYaw) * dist * Math.cos(this.cameraPitch),
-          Math.sin(this.cameraPitch) * dist + height,
-          Math.cos(this.cameraYaw) * dist * Math.cos(this.cameraPitch)
-        );
-        targetCamPos = target.clone().add(offset);
+        const dist = isDriving ? 6.2 : 4.6;
+        // Camera placed behind focusPoint along -forward
+        targetCamPos = focusPoint.clone().sub(forward.clone().multiplyScalar(dist));
+        // Over-the-shoulder right offset when on foot
+        if (!isDriving) {
+          const right = new THREE.Vector3(Math.cos(this.cameraYaw), 0, -Math.sin(this.cameraYaw));
+          targetCamPos.addScaledVector(right, 0.45);
+        }
+        lookTarget = focusPoint.clone().add(forward.clone().multiplyScalar(15));
         break;
       }
 
       case 'TPS_FAR': {
-        const dist = 9.5;
-        const height = 4.2;
-        const offset = new THREE.Vector3(
-          Math.sin(this.cameraYaw) * dist * Math.cos(this.cameraPitch),
-          Math.sin(this.cameraPitch) * dist + height,
-          Math.cos(this.cameraYaw) * dist * Math.cos(this.cameraPitch)
-        );
-        targetCamPos = target.clone().add(offset);
+        const dist = isDriving ? 9.5 : 7.8;
+        targetCamPos = focusPoint.clone().sub(forward.clone().multiplyScalar(dist));
+        lookTarget = focusPoint.clone().add(forward.clone().multiplyScalar(20));
         break;
       }
 
       case 'TOP_DOWN': {
-        targetCamPos = target.clone().add(new THREE.Vector3(0, 45, 0.1));
-        lookTarget = target.clone();
+        targetCamPos = targetPos.clone().add(new THREE.Vector3(0, 42, 0.01));
+        lookTarget = targetPos.clone();
         break;
       }
 
       case 'HOOD_FIRST': {
-        if (this.player.isDriving && this.player.currentVehicle) {
-          const v = this.player.currentVehicle;
-          const forward = new THREE.Vector3(Math.sin(v.heading), 0, Math.cos(v.heading));
-          targetCamPos = v.position.clone().add(new THREE.Vector3(0, 1.2, 0)).addScaledVector(forward, 0.8);
-          lookTarget = targetCamPos.clone().addScaledVector(forward, 25);
+        if (isDriving && vehicle) {
+          // Hood / driver seat camera
+          const vForward = new THREE.Vector3(Math.sin(vehicle.heading), 0, Math.cos(vehicle.heading));
+          targetCamPos = vehicle.position.clone().add(new THREE.Vector3(0, 1.25, 0)).addScaledVector(vForward, 0.6);
+          lookTarget = targetCamPos.clone().add(forward.clone().multiplyScalar(25));
         } else {
-          targetCamPos = target.clone().add(new THREE.Vector3(0, 1.6, 0));
+          // True first-person FPS view
+          targetCamPos = targetPos.clone().add(new THREE.Vector3(0, 1.65, 0));
+          lookTarget = targetCamPos.clone().add(forward.clone().multiplyScalar(25));
         }
         break;
       }
     }
 
     // Smooth camera damping
-    this.cameraCurrentPos.lerp(targetCamPos, delta * 12);
+    this.cameraCurrentPos.lerp(targetCamPos, delta * 15);
+    this.cameraCurrentLook.lerp(lookTarget, delta * 18);
+
     this.camera.position.copy(this.cameraCurrentPos);
-    this.camera.lookAt(lookTarget);
+    this.camera.lookAt(this.cameraCurrentLook);
   }
 
   private triggerWasted() {
     this.isGameOver = true;
+    this.input.exitPointerLock();
     this.hud.showGameOver('WASTED', '하안 응급실로 후송되었습니다 (-₩50,000)', () => {
       this.respawnPlayer();
     });
@@ -427,6 +490,7 @@ class Game {
 
   private triggerBusted() {
     this.isGameOver = true;
+    this.input.exitPointerLock();
     this.hud.showGameOver('BUSTED', '광명경찰서 하안지구대에 체포되었습니다 (-₩70,000)', () => {
       this.respawnPlayer();
     });
@@ -435,9 +499,9 @@ class Game {
   private respawnPlayer() {
     this.wantedSystem.clearWanted();
     this.missionManager.cancelMission();
-    this.player.respawn(new THREE.Vector3(18, 0, 18));
+    this.player.respawn(new THREE.Vector3(14.5, 0, 20));
     this.isGameOver = false;
-    this.hud.setTip('🏥 하안사거리에서 치료를 마치고 복귀했습니다.');
+    this.hud.setTip('🏥 하안사거리에서 치료를 마치고 복귀했습니다. (클릭하여 시점 활성화)');
   }
 }
 

@@ -37,6 +37,49 @@
       height: 100%;
       display: block;
       touch-action: none;
+      cursor: crosshair;
+    }
+
+    /* Crosshair for FPS/TPS Aiming */
+    #crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 6px;
+      height: 6px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.9);
+      border: 1.5px solid rgba(0, 0, 0, 0.8);
+      box-shadow: 0 0 6px rgba(0, 210, 255, 0.6);
+      pointer-events: none;
+      z-index: 45;
+    }
+
+    /* Pointer Lock Guide Badge */
+    #pointer-hint {
+      position: absolute;
+      top: 70px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(12, 18, 28, 0.88);
+      border: 1px solid #ffaa00;
+      color: #ffea70;
+      padding: 7px 18px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-family: -apple-system, BlinkMacSystemFont, "Pretendard", sans-serif;
+      font-weight: 600;
+      pointer-events: none;
+      z-index: 45;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+      display: none;
+      animation: pulse-hint 2s infinite alternate;
+    }
+
+    @keyframes pulse-hint {
+      0% { opacity: 0.85; transform: translateX(-50%) scale(1); }
+      100% { opacity: 1; transform: translateX(-50%) scale(1.03); }
     }
 
     /* HUD Container */
@@ -567,7 +610,6 @@
     #btn-touch-gas { right: 20px; bottom: 85px; background: rgba(0, 220, 100, 0.6); }
     #btn-touch-brake { right: 20px; bottom: 20px; background: rgba(255, 50, 50, 0.6); }
     #btn-touch-horn { right: 90px; bottom: 85px; }
-    #btn-touch-drift { right: 90px; bottom: 20px; }
 
     /* Floating Wasted / Busted banner */
     #game-over-overlay {
@@ -611,12 +653,19 @@
       .logo-main { font-size: 38px; }
       #help-btn { font-size: 11px; padding: 4px 10px; }
       #mobile-controls { display: block; }
+      #crosshair { display: none; }
     }
   </style>
 </head>
 <body>
   <!-- 3D Canvas -->
   <canvas id="game-canvas"></canvas>
+
+  <!-- Crosshair for FPS/TPS Aiming -->
+  <div id="crosshair"></div>
+
+  <!-- Pointer Lock Guide Badge -->
+  <div id="pointer-hint">🖱️ 화면을 클릭하면 FPS 마우스 시점 조작이 활성화됩니다 (ESC: 일시정지)</div>
 
   <!-- Start / Splash Screen -->
   <div id="splash-screen">
@@ -734,7 +783,7 @@
         <div class="key-item"><span>점프</span><span class="key-badge">Space</span></div>
         <div class="key-item"><span>펀치 공격 / 액션</span><span class="key-badge">클릭 / E</span></div>
         <div class="key-item"><span>차량 탑승 / 강탈</span><span class="key-badge">F / Enter</span></div>
-        <div class="key-item"><span>카메라 시점 회전</span><span class="key-badge">마우스 드래그</span></div>
+        <div class="key-item"><span>FPS 자유 시점 회전</span><span class="key-badge">마우스 이동 (Pointer Lock)</span></div>
       </div>
 
       <div class="modal-section-title">🚗 차량 운전 조작 (Driving)</div>
@@ -742,7 +791,7 @@
         <div class="key-item"><span>가속 / 후진</span><span class="key-badge">W / S (↑ / ↓)</span></div>
         <div class="key-item"><span>핸들 조향</span><span class="key-badge">A / D (← / →)</span></div>
         <div class="key-item"><span>핸드브레이크 (드리프트)</span><span class="key-badge">Space</span></div>
-        <div class="key-item"><span>클랙슨 경적</span><span class="key-badge">H</span></div>
+        <div class="key-item"><span>클랙슨 경적</span><span class="key-badge">H / 마우스 우클릭</span></div>
         <div class="key-item"><span>차량 하차</span><span class="key-badge">F / Enter</span></div>
         <div class="key-item"><span>경찰차 사이렌 토글</span><span class="key-badge">E</span></div>
       </div>

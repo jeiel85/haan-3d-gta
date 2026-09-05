@@ -24,15 +24,19 @@ export class TrafficManager {
   }
 
   private initLanes() {
-    // Ori-ro (오리로 NS)
-    this.lanes.push({ id: 'NS_NB_1', isNorthSouth: true, fixedCoord: -4.5, direction: -1, heading: Math.PI });
-    this.lanes.push({ id: 'NS_NB_2', isNorthSouth: true, fixedCoord: -8.5, direction: -1, heading: Math.PI });
-    this.lanes.push({ id: 'NS_SB_1', isNorthSouth: true, fixedCoord: 4.5, direction: 1, heading: 0 });
-    this.lanes.push({ id: 'NS_SB_2', isNorthSouth: true, fixedCoord: 8.5, direction: 1, heading: 0 });
+    // Ori-ro (오리로 NS - Right-hand traffic)
+    // Northbound (heading: Math.PI, toward -Z) on East (+X) side
+    this.lanes.push({ id: 'NS_NB_1', isNorthSouth: true, fixedCoord: 4.5, direction: -1, heading: Math.PI });
+    this.lanes.push({ id: 'NS_NB_2', isNorthSouth: true, fixedCoord: 8.5, direction: -1, heading: Math.PI });
+    // Southbound (heading: 0, toward +Z) on West (-X) side
+    this.lanes.push({ id: 'NS_SB_1', isNorthSouth: true, fixedCoord: -4.5, direction: 1, heading: 0 });
+    this.lanes.push({ id: 'NS_SB_2', isNorthSouth: true, fixedCoord: -8.5, direction: 1, heading: 0 });
 
-    // Haan-ro (하안로 EW)
+    // Haan-ro (하안로 EW - Right-hand traffic)
+    // Eastbound (heading: Math.PI/2, toward +X) on South (+Z) side
     this.lanes.push({ id: 'EW_EB_1', isNorthSouth: false, fixedCoord: 4.5, direction: 1, heading: Math.PI / 2 });
     this.lanes.push({ id: 'EW_EB_2', isNorthSouth: false, fixedCoord: 8.5, direction: 1, heading: Math.PI / 2 });
+    // Westbound (heading: -Math.PI/2, toward -X) on North (-Z) side
     this.lanes.push({ id: 'EW_WB_1', isNorthSouth: false, fixedCoord: -4.5, direction: -1, heading: -Math.PI / 2 });
     this.lanes.push({ id: 'EW_WB_2', isNorthSouth: false, fixedCoord: -8.5, direction: -1, heading: -Math.PI / 2 });
   }

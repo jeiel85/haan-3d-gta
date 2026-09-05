@@ -1,4 +1,6 @@
 export class InputController {
+  private canvas: HTMLCanvasElement;
+
   // Movement keys
   public forward = false;
   public backward = false;
@@ -21,11 +23,30 @@ export class InputController {
   public mouseDeltaX = 0;
   public mouseDeltaY = 0;
   public isMouseDown = false;
+  public isPointerLocked = false;
 
-  constructor() {
+  constructor(canvas: HTMLCanvasElement) {
+    this.canvas = canvas;
     this.initKeyboard();
     this.initMouse();
     this.initTouch();
+  }
+
+  public requestPointerLock() {
+    if (document.pointerLockElement !== this.canvas) {
+      try {
+        const promise = this.canvas.requestPointerLock();
+        if (promise && 'catch' in promise) {
+          promise.catch(() => {});
+        }
+      } catch {}
+    }
+  }
+
+  public exitPointerLock() {
+    if (document.pointerLockElement === this.canvas) {
+      document.exitPointerLock();
+    }
   }
 
   private initKeyboard() {
@@ -118,12 +139,35 @@ export class InputController {
   }
 
   private initMouse() {
+    // Listen to Pointer Lock state change
+    document.addEventListener('pointerlockchange', () => {
+      this.isPointerLocked = (document.pointerLockElement === this.canvas);
+      const hint = document.getElementById('pointer-hint');
+      if (hint) {
+        // Show hint when unlocked so user knows to click
+        hint.style.display = this.isPointerLocked ? 'none' : 'block';
+      }
+    });
+
+    // Clicking canvas requests pointer lock and triggers punch
+    this.canvas.addEventListener('click', () => {
+      if (!this.isPointerLocked) {
+        this.requestPointerLock();
+      }
+    });
+
     window.addEventListener('mousedown', (e) => {
-      if (e.button === 0) {
+      if (e.target === this.canvas) {
         this.isMouseDown = true;
-        // Also trigger punch if clicking on the main canvas
-        if (e.target && (e.target as HTMLElement).id === 'game-canvas') {
-          this.punchTrigger = true;
+        if (!this.isPointerLocked) {
+          this.requestPointerLock();
+        } else {
+          // In pointer lock: Left Click = Punch / Action, Right Click = Horn
+          if (e.button === 0) {
+            this.punchTrigger = true;
+          } else if (e.button === 2) {
+            this.hornTrigger = true;
+          }
         }
       }
     });
@@ -132,10 +176,18 @@ export class InputController {
       this.isMouseDown = false;
     });
 
+    // Natural FPS Mouse Look: rotates camera simply by moving mouse!
     window.addEventListener('mousemove', (e) => {
-      if (this.isMouseDown) {
+      if (this.isPointerLocked || this.isMouseDown) {
         this.mouseDeltaX += e.movementX;
         this.mouseDeltaY += e.movementY;
+      }
+    });
+
+    // Prevent default right-click menu during gameplay
+    window.addEventListener('contextmenu', (e) => {
+      if (this.isPointerLocked || e.target === this.canvas) {
+        e.preventDefault();
       }
     });
   }
