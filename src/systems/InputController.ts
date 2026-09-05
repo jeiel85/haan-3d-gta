@@ -80,31 +80,31 @@ export class InputController {
           e.preventDefault();
           break;
 
-        // Triggers
+        // Triggers (Only fire on first physical press, never on key repeat!)
         case 'KeyF':
         case 'Enter':
-          this.enterVehicleTrigger = true;
+          if (!e.repeat) this.enterVehicleTrigger = true;
           break;
         case 'KeyE':
-          this.punchTrigger = true;
+          if (!e.repeat) this.punchTrigger = true;
           break;
         case 'KeyH':
-          this.hornTrigger = true;
+          if (!e.repeat) this.hornTrigger = true;
           break;
         case 'KeyL':
-          this.lightsTrigger = true;
+          if (!e.repeat) this.lightsTrigger = true;
           break;
         case 'KeyC':
-          this.cameraViewTrigger = true;
+          if (!e.repeat) this.cameraViewTrigger = true;
           break;
         case 'KeyT':
-          this.timeWeatherTrigger = true;
+          if (!e.repeat) this.timeWeatherTrigger = true;
           break;
         case 'KeyR':
-          this.radioTrigger = true;
+          if (!e.repeat) this.radioTrigger = true;
           break;
         case 'KeyM':
-          this.missionTrigger = true;
+          if (!e.repeat) this.missionTrigger = true;
           break;
       }
     });

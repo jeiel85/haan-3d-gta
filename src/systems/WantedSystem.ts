@@ -85,6 +85,9 @@ export class WantedSystem {
     let isNearPolice = false;
 
     this.policeCars.forEach(cop => {
+      // If player is driving this police car, don't run police pursuit AI on it!
+      if (cop.isPlayerDriving) return;
+
       const dist = cop.position.distanceTo(playerPos);
       if (dist < 40) {
         isNearPolice = true;
@@ -103,12 +106,13 @@ export class WantedSystem {
       while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
       while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
 
-      const steer = Math.min(Math.max(angleDiff * 1.8, -1), 1);
+      // Inverted steering matches updated vehicle physics
+      const steer = -Math.min(Math.max(angleDiff * 1.8, -1), 1);
       const throttle = targetDist > 4 ? 0.95 : 0.2;
 
       cop.updatePhysics(delta, throttle, steer, Math.abs(angleDiff) > 1.2);
 
-      // Check Busted condition (player car cornered or very slow next to police)
+      // Check Busted condition (player car cornered or stopped next to enemy police)
       if (dist < 4.5 && Math.abs(playerSpeed) < 3.0) {
         this.bustedTimer += delta;
         if (this.bustedTimer > 3.2) {
